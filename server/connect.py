@@ -1,7 +1,7 @@
 import psycopg2
 from config import load_config
 
-def connect():
+def openConnection():
     """ Connect to the PostGreSQL Server """
     config = load_config()
     try:
@@ -12,14 +12,10 @@ def connect():
     except (psycopg2.DatabaseError, Exception) as error:
         print(error)
 
-if __name__ == '__main__':
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("SELECT useruuid FROM users")
-    print(cur.fetchall())
-
-    cur.execute("INSERT INTO users(useruuid, username) VALUES(%s, %s) RETURNING useruuid;", ("blegh", "null"))
-    conn.commit()
-
-    cur.execute("SELECT useruuid FROM users")
-    print(cur.fetchall())
+def writeData(query: str, *args: str):
+    with openConnection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, args)
+            result = cursor.fetchall()
+            connection.commit()
+    return result

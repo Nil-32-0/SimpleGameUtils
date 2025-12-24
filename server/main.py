@@ -1,8 +1,12 @@
 import flask
 import random
 import requests
-from connect import connect
 import psycopg2
+
+import auth
+from auth import MissingData, DuplicateData
+from connect import openConnection, writeData
+
 
 app = flask.Flask(__name__)
 
@@ -17,41 +21,23 @@ def webhook_reciever():
 def generate_userkey():
     data = flask.request.json
 
-    mojangUrl = "https://api.mojang.com/users/profiles/minecraft/"
-
-    rows = None
     try:
-        with connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT mojanguuid FROM users")
-                rows = cursor.fetchall()
-
+        auth.data_present(data, ['username'])
+        uid, mojanguuid = auth.generate_userkey(data)
+    except MissingData as error:
+        print(error)
+        return flask.jsonify({'message': error.errorMsg}), error.errorCode
+    except DuplicateData as error:
+        print(error)
+        return flask.jsonify({'message': error.errorMsg}), 400
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
         return flask.jsonify({'message': "Error: " + str(error)}), 503
-
-    username = data['username']
-    mojangUuid = requests.get(mojangUrl+username).json()['id']
-
-    for row in rows: 
-        if row[0] == mojangUuid:
-            return flask.jsonify({'message': "Error: That user already has an account!"}), 403
-    
-    uid = ""
-    for char in mojangUuid:
-        min = 48
-        max = 126
-        uid += char
-        uid += chr(random.randint(min, max))
     
     try:
-        with connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute("INSERT INTO users(useruuid, username, mojanguuid) VALUES(%s,%s,%s);", (
-                    uid, username, mojangUuid
-                ))
-
-                connection.commit()
+        writeData("INSERT INTO users(useruuid, username, mojanguuid) VALUES(%s,%s,%s);", 
+            uid, data['username'], mojanguuid 
+        )
 
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
@@ -59,61 +45,73 @@ def generate_userkey():
     
     return flask.jsonify({'message': "Your access key has been generated, save this in a safe place", 'key': uid}), 200
 
-inv = {}
 
-def item_modification(itemID, delta):
-    if itemID in inv:
-        inv[itemID] += delta
-    else:
-        inv[itemID] = delta
-
-    if inv[itemID] < 0:
-        inv[itemID] -= delta
-        raise ValueError("You cannot have less than 0 "+ itemID + "! Value has been reset to previous value.")
-    
-    return inv[itemID]
-
-def get_username_from_uuid(uuid):
-    row = None
-    with connect() as connection:
-        with connection.cursor() as cur:
-            cur.execute("SELECT username FROM users WHERE useruuid = %s;",  (uuid,))
-
-            row = cur.fetchone()
-
-    return row[0] if row != None else None
-
-def authenticate(username, uuid):
+def get_projects(uuid):
     try:
-        validUser = get_username_from_uuid(uuid)
-        return validUser is not None and validUser == username
+        with openConnection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT project_name,project_desc FROM projects WHERE scope = 'PUBLIC' OR creator_uuid = %s", (uuid,))
+                projects = cursor.fetchall()
+
+                if len(projects) == 0:
+                    return flask.jsonify({'message': "No projects visible!"}), 200
+
+                return flask.jsonify({
+                    'project_names': [project[0] for project in projects],
+                    'project_descs': [project[1] for project in projects]
+                }), 200
+
     except Exception as ex:
         print(ex)
-        return False
-    
+        return flask.jsonify({'message': ex}), 401
 
-@app.route("/webhook/item_changed", methods=["POST"])
-def item_reciever():
+@app.route("/webhook/get_projects", methods=["POST"])
+def get_projects_hook():
     data = flask.request.json
 
-    print(data)
-
-    if 'username' not in data:
-        return flask.jsonify({'message': "Invalid username!"}), 401
-    if 'uuid' not in data:
-        return flask.jsonify({'message': "Invalid uuid!"}), 401
-    if not authenticate(data['username'], data['uuid']):
-        return flask.jsonify({'message': "Invalid access key/username pair!"}), 401
-
-    item = data['item']
     try:
-        newQty = item_modification(item, data['amount'])
-    except ValueError as v:
-        return flask.jsonify({"message": v.args[0]}), 422
+        auth.validate(data)
+    except MissingData as error:
+        return flask.jsonify({'message': error.errorMsg}), error.errorCode
+    except Exception as error:
+        print(error)
+        return flask.jsonify({'message': "Error: " + str(error)}), 500
+    
+    return get_projects(data['uuid'])
 
-    print(inv)
+@app.route("/webhook/create_project", methods=["POST"])
+def create_project():
+    data = flask.request.json
 
-    return flask.jsonify({'item': item, 'amount': newQty}), 200
+    try:
+        auth.validate(data)
+    except MissingData as error:
+        return flask.jsonify({'message': error.errorMsg}), error.errorCode
+    except Exception as error:
+        print(error)
+        return flask.jsonify({'message': "Error: " + str(error)}), 500
+    
+    if 'project_name' not in data:
+        return flask.jsonify({'message': "A project name must be specified!"}), 400
+    
+    project_desc = data['project_desc'] if 'project_desc' in data else ""
+    scope = data['scope'] if 'scope' in data else "PUBLIC"
+
+    try:
+        with openConnection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("INSERT INTO projects(project_name,project_desc,scope,creator_uuid) VALUES (%s,%s,%s,%s)", (
+                    data['project_name'],
+                    project_desc,
+                    scope,
+                    data['uuid']
+                ))
+                connection.commit()
+    except Exception as ex:
+        print(ex)
+        return flask.jsonify({'message': ex}), 500
+
+    return get_projects(data['uuid'])
 
 if __name__ == "__main__":
     app.run(debug=True)
