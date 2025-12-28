@@ -1,11 +1,10 @@
-from connect import openConnection
-import flask
+from connect import openConnection, queryData, writeData
 import random
 import requests
 
-def generate_userkey(data) -> tuple[str, str]:
-    mojangUrl = "https://api.mojang.com/users/profiles/minecraft/"
+mojangUrl = "https://api.mojang.com/users/profiles/minecraft/"
 
+def generate_userkey(data) -> tuple[str, str]:
     rows = []
     with openConnection() as connection:
         with connection.cursor() as cursor:
@@ -35,12 +34,30 @@ def validate(data):
 
     with openConnection() as connection:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT username FROM users WHERE useruuid = %s;",  (data['uuid'],))
+            cursor.execute("SELECT username,mojanguuid FROM users WHERE useruuid = %s;",  (data['uuid'],))
 
             row = cursor.fetchone()
 
     if row is None or row[0] != data['username'].lower():
         raise MissingData(401, "Invalid access key/username pair!")
+    if row[0] != data['username'].lower():
+        mojangUuid = requests.get(mojangUrl+data['username']).json()['id']
+        if row[1] == mojangUuid:
+            writeData("UPDATE users SET username = %s WHERE useruuid = %s;", data['username'], data['uuid'])
+        else:
+            raise MissingData(401, "Invalid access key/username pair!")
+    
+def user_exists(uuid):
+    uuids = queryData("SELECT useruuid FROM users;")
+    return uuid in [uuids[0] for uid in uuids]
+
+def username_exists(username):
+    usernames = queryData("SELECT username FROM users;")
+    return username.lower() in [user[0].lower() for user in usernames]
+
+def get_uuid_from_username(username):
+    return queryData("SELECT useruuid FROM users WHERE username = %s;", username, fetchAll=False)[0]
+
 
 
 class MissingData(Exception):

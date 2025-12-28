@@ -7,15 +7,28 @@ def openConnection():
     try:
         # connecting to the PostgreSQL server
         with psycopg2.connect(**config) as conn:
-            print('Connected to the PostgreSQL server.')
+            # print('Connected to the PostgreSQL server.')
             return conn
     except (psycopg2.DatabaseError, Exception) as error:
         print(error)
 
-def writeData(query: str, *args: str):
+def queryData(query: str, *args: str, fetchAll = True):
     with openConnection() as connection:
         with connection.cursor() as cursor:
             cursor.execute(query, args)
-            result = cursor.fetchall()
+
+            if fetchAll:
+                return cursor.fetchall()
+            else:
+                return cursor.fetchone()
+
+def writeData(query: str, *args: str):
+    result = None
+    with openConnection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(query, args)
+            if "returning" in query.lower():
+                result = cursor.fetchall()
             connection.commit()
-    return result
+    if result is not None:
+        return result
