@@ -1,2 +1,4 @@
 /server/__pycache__
 server/database.ini
+.vscode/settings.json
+clients/Minecraft/1.21.8-fabric/.gitattributes

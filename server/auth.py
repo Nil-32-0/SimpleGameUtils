@@ -4,9 +4,9 @@ import requests
 
 mojangUrl = "https://api.mojang.com/users/profiles/minecraft/"
 
-def generate_userkey(data) -> tuple[str, str]:
+def generate_userkey(connection, data) -> tuple[str, str]:
     rows = []
-    with openConnection() as connection:
+    with connection:
         with connection.cursor() as cursor:
             cursor.execute("SELECT mojanguuid,username FROM users;")
             rows = cursor.fetchall()
@@ -21,42 +21,46 @@ def generate_userkey(data) -> tuple[str, str]:
         raise DuplicateData("Error: that user already has an account!")
     
     uid = ""
-    min = 48
-    max = 126
+    acceptableValues = list(range(48, 58))
+    acceptableValues.extend(range(65, 91))
+    acceptableValues.extend(range(97, 123))
+    
     for char in mojangUuid:
         uid += char
-        uid += chr(random.randint(min, max))
+        uid += chr(random.choice(acceptableValues))
     
     return uid, mojangUuid
 
-def validate(data):
-    data_present(data, ['uuid', 'username'], 401)
-
-    with openConnection() as connection:
+def validate(connection, data) -> tuple[bool, str | None]:
+    with connection:
         with connection.cursor() as cursor:
             cursor.execute("SELECT username,mojanguuid FROM users WHERE useruuid = %s;",  (data['uuid'],))
 
             row = cursor.fetchone()
 
     if row is None or row[0] != data['username'].lower():
-        raise MissingData(401, "Invalid access key/username pair!")
+        return False, "Invalid access key/username pair!"
+    
     if row[0] != data['username'].lower():
         mojangUuid = requests.get(mojangUrl+data['username']).json()['id']
+
         if row[1] == mojangUuid:
             writeData("UPDATE users SET username = %s WHERE useruuid = %s;", data['username'], data['uuid'])
         else:
-            raise MissingData(401, "Invalid access key/username pair!")
+            return False, "Invalid access key/username pair!"
+        
+    return True, None
     
-def user_exists(uuid):
-    uuids = queryData("SELECT useruuid FROM users;")
+def user_exists(connection, uuid):
+    uuids = queryData(connection, "SELECT useruuid FROM users;")
     return uuid in [uuids[0] for uid in uuids]
 
-def username_exists(username):
-    usernames = queryData("SELECT username FROM users;")
+def username_exists(connection, username):
+    usernames = queryData(connection, "SELECT username FROM users;")
     return username.lower() in [user[0].lower() for user in usernames]
 
-def get_uuid_from_username(username):
-    return queryData("SELECT useruuid FROM users WHERE username = %s;", username, fetchAll=False)[0]
+def get_uuid_from_username(connection, username):
+    return queryData(connection, "SELECT useruuid FROM users WHERE username = %s;", username, fetchAll=False)[0]
 
 
 
@@ -73,7 +77,10 @@ class DuplicateData(Exception):
 
         self.errorMsg = message
 
-def data_present(data, fields: list[str], errorCode = 400):
+def data_present(data, fields: list[str]) -> tuple[bool, list[str] | None]:
+    missing_fields = []
     for field in fields:
         if field not in data:
-            raise MissingData(errorCode, "Error: Missing " + field + " field!")
+            missing_fields += field 
+    missing_data = len(missing_fields) != 0
+    return not missing_data, missing_fields if missing_data else None 
