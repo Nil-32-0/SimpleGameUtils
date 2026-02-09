@@ -3,8 +3,10 @@ import auth
 from connect import openConnection, writeData
 from enum import Enum
 import groups
+import items
 from json import loads, dumps
 from picows import ws_create_server, WSFrame, WSTransport, WSListener, WSMsgType, WSUpgradeRequest, WSAutoPingStrategy
+import projects
 
 auth_connections = {}
 
@@ -21,6 +23,30 @@ class SBUMsgType(Enum):
     GROUP_DELETE = "group-delete", ['type', 'group_id']
     GROUP_SUCCESS = "group-success", ['type', 'message']
     GROUP_TRANSFER = "group-transfer", ['type', 'group_id', 'new_owner_username']
+    GROUP_ADD = "group-add", ['type', 'group_id', 'new_member_username']
+    GROUP_REMOVE = "group-remove", ['type', 'group_id', 'member_username']
+    GROUP_LEAVE = "group-leave", ['type', 'group_id']
+    GROUP_INFO_REQ = "group-info-req", ['type', 'group_id']
+    GROUP_LIST = "group-list", ['type']
+    INVENTORY_ADD = "inventory-add", ['type', 'external_id']
+    INVENTORY_REMOVE = "inventory-remove", ['type', 'external_id']
+    ITEM_GET = "item-get", ['type', 'external_id']
+    ITEM_ADD = "item-add", ['type', 'external_id', 'item_id', 'item_qty']
+    ITEM_REMOVE = "item-remove", ['type', 'external_id', 'item_id', 'item_qty']
+    ITEM_DELETE = "item-delete", ['type', 'external_id', 'item_id']
+    ITEM_TRANSFER = "item-transfer", ['type', 'item_id', 'item_qty', 'source_id', 'target_id']
+    PROJECT_VIEW_ALL = "project-view-all", ['type']
+    PROJECT_VIEW_ONE = "project-view-one", ['type', 'project_id']
+    PROJECT_CREATE = "project-create", ['type', 'name', 'scope', 'desc', 'group_id']
+    PROJECT_DELETE = "project-delete", ['type', 'project_id']
+    PROJECT_TRANSFER = "project-transfer", ['type', 'project_id', 'new_owner_username']
+    PROJECT_SCOPE = "project-scope", ['type', 'scope', 'group_id']
+    PROJECT_ITEM_TRACK = "project-item-track", ['type', 'project_id', 'item_id', 'item_qty']
+    PROJECT_ITEM_DELETE = "project-item-delete", ['type', 'project_id', 'item_id']
+    PROJECT_ITEM_ADD = "project-item-add", ['type', 'project_id', 'item_id', 'item_qty', 'external_id']
+    PROJECT_ITEM_REMOVE = "project-item-remove", ['type', 'project_id', 'item_id', 'item_qty', 'external_id']
+    PROJECT_ITEM_RESERVE = "project-item-reserve", ['type', 'target_project_id', 'item_id', 'item_qty', 'external_id', 'source_project_id']
+    PROJECT_ITEM_RELEASE = "project-item-release", ['type', 'project_id', 'item_id', 'item_qty', 'external_id']
 
 
 def find_type(type: str) -> SBUMsgType | None:
@@ -53,7 +79,7 @@ def auth_sbu_message(payload: dict[str, any]) -> tuple[bool, str | None]:
     if msgType is None:
         return False, "Invalid type!"
     
-    allFieldsPresent, missingFields = auth.data_present(payload, msgType.value[2])
+    allFieldsPresent, missingFields = auth.data_present(payload, msgType.value[1])
     return allFieldsPresent, None if allFieldsPresent else "Missing fields: " + ", ".join(missingFields)
 
 
@@ -68,7 +94,7 @@ class ServerClientListener(WSListener):
     def on_ws_disconnected(self, transport: WSTransport):
         if self.connection is not None:
             self.connection.close()
-            print("Connection closed!")
+            print("SQL connection closed!")
         auth_connections.pop(self, None)
         print("Client disconnected")
 
@@ -85,6 +111,7 @@ class ServerClientListener(WSListener):
         
         else:
             try:
+                print(frame.get_payload_as_utf8_text())
                 payload = loads(frame.get_payload_as_utf8_text())
             except Exception as e:
                 send_json(transport, {'type': "error", 'message': "All messages must be String representations of a json object encoded with utf-8!"})
@@ -112,6 +139,12 @@ class ServerClientListener(WSListener):
                     match payload['type']:
                         case x if str(x).startswith("group"):
                             self.group_handler(transport, payload)
+                        case x if str(x).startswith("inventory"):
+                            self.inventory_handler(transport, payload)
+                        case x if str(x).startswith("item"):
+                            self.item_handler(transport, payload)
+                        case x if str(x).startswith("project"):
+                            self.project_handler(transport, payload)
                 except Exception as e:
                     print(e)
                     send_json(transport, {'type': "error", 'message': e})
@@ -136,7 +169,7 @@ class ServerClientListener(WSListener):
             send_json(transport, {'type': "auth-key",'uuid': uid})
 
         self.uuid = uid
-        send_json(transport, {'type': "auth", 'subtype': "success"})
+        send_json(transport, {'type': "auth-success"})
 
         auth_connections[uid] = self
 
@@ -250,6 +283,120 @@ class ServerClientListener(WSListener):
                     'type': "group-info",
                     'info': info
                 })
+    
+    def inventory_handler(self, transport: WSTransport, payload: dict[str, any]) -> None:
+        match payload['type']:
+            case "inventory-add":
+                items.add_inventory(self.connection, payload['external_id'])
+            case "inventory-remove":
+                items.remove_inventory(self.connection, payload['external_id'])
+
+    def item_handler(self, transport: WSTransport, payload: dict[str, any]) -> None:
+        match payload['type']:
+            case "item-get":
+                item_list = items.get_items(self.connection, items.get_internal_id(self.connection, payload['external_id']))
+                send_json(transport, {'type': "item-info", 'items': item_list, 'inventory': payload['external_id']})
+            case "item-add":
+                qty = items.add_item(self.connection, items.get_internal_id(self.connection, payload['external_id']), 
+                                    payload['item_id'], payload['item_qty'])
+                send_json(transport, {'type': "item-info", 'items': [(payload['item_id'], qty)], 'inventory': payload['external_id']})
+            case "item-remove":
+                qty = items.remove_item(self.connection, items.get_internal_id(payload['external_id']),
+                                    payload['item_id'], payload['item_qty'])
+                send_json(transport, {'type': "item-info", 'items': [(payload['item_id'], qty)], 'inventory': payload['external_id']})
+            case "item-delete":
+                items.delete_item(self.connection, items.get_internal_id(self.connection, payload['external_id']), payload['item_id'])
+            case "item-transfer":
+                qtys = items.transfer_item(self.connection, payload['item_id'], 
+                                    items.get_internal_id(self.connection, payload['source_id']), 
+                                    items.get_internal_id(self.connection, payload['target_id']), payload['item_qty'])
+                send_json(transport, {'type': "item-info", 'items': [(payload['item_id'], qtys[0])], 'inventory': payload['source_id']})
+                send_json(transport, {'type': "item-info", 'items': [(payload['item_id'], qtys[1])], 'inventory': payload['target_id']})
+
+    def project_handler(self, transport: WSTransport, payload: dict[str, any]) -> None:
+        requires_ownership = ['project-delete', 'project-transfer', 'project-scope']
+        if payload['type'] in requires_ownership and int(payload['project_id']) not in projects.get_owned_projects(self.connection, self.uuid):
+            send_json(transport, {
+                'type': "error",
+                'message': "You can't perform that action on a project you don't own!"
+            })
+            return
+
+        match payload['type']:
+            case "project-view-all":
+                proj = projects.get_projects(self.connection, self.uuid)
+                send_json(transport, {'type': "project-info-all", 'projects': proj})
+            case "project-view-one":
+                if int(payload['project_id']) not in [x[0] for x in projects.get_projects(self.connection, self.uuid)]:
+                    send_json(transport, {'type': "error", 'message': "You can't view details of a project you don't have access to!"})
+                    return
+                goal = projects.get_project_goal(self.connection, payload['project_id'])
+                gathered = projects.get_items_for_project(self.connection, payload['project_id'])
+                total = {}
+                for entry in gathered:
+                    if entry['id'] in total:
+                        total[entry['id']] += entry['count']
+                    else:
+                        total[entry['id']] = entry['count']
+                    entry['inventory'] = items.get_remote_id(self.connection, entry['inventory'])
+                progress = {}
+                for item in goal:
+                    progress[goal] = {'goal': goal[item], 'gathered': total[item]}
+                
+                send_json(transport, {'type': "project-info-single", 'project_id': payload['project_id'],
+                                        'goal': goal, 'gathered': gathered, 'progress': progress})
+            case "project-create":
+                if (payload['scope'] == "GROUP" and int(payload['group_id']) == -1):
+                    send_json(transport, {'type': "error", 'message': "You must specify the group ID if setting scope to group!"})
+                    return
+                if int(payload['group_id'] == -1):
+                    projects.create_project(self.connection, self.uuid, payload['name'], payload['scope'], payload['desc'])
+                else:
+                    projects.create_project(self.connection, self.uuid, payload['name'], payload['scope'], payload['desc'], payload['group_id'])
+            case "project-delete":
+                projects.delete_project(self.connection, payload['project_id'])
+            case "project-transfer":
+                if not auth.username_exists(self.connection, payload['new_owner_username']):
+                    send_json(transport, {'type': "error", 'message': "You can't transfer the project to a player who doesn't exist!"})
+                    return
+                
+                projects.transfer_project(self.connection, payload['project_id'], auth.get_uuid_from_username(self.connection, payload['new_owner_username']))
+            case "project-scope":
+                if (payload['scope'] == "GROUP" and int(payload['group_id']) == -1):
+                    send_json(transport, {'type': "error", 'message': "You must specify the group ID if setting scope to group!"})
+                    return
+                projects.change_scope(self.connection, payload['project_id'], payload['scope'], 
+                                    payload['group_id'] if int(payload['group_id']) != -1 else None)
+            case "project-item-track":
+                projects.add_item(self.connection, payload['project_id'], payload['item_id'], payload['item_qty'])
+            case "project-item-delete":
+                projects.remove_item(self.connection, payload['project_id'], payload['item_id'])
+            case "project-item-add":
+                qty = items.add_item(self.connection, items.get_internal_id(self.connection, payload['external_id']), payload['item_id'],
+                                payload['item_qty'], payload['project_id'])
+                send_json(transport, {'type': "project-item-info", 'items': [(payload['item_id'], qty)], 'inventory': payload['external_id'], 
+                                        'project_id': payload['project_id']})
+            case "project-item-remove":
+                qty = items.remove_item(self.connection, items.get_internal_id(self.connection, payload['external_id']), payload['item_id'],
+                                payload['item_qty'], payload['project_id'])
+                send_json(transport, {'type': "project-item-info", 'items': [(payload['item_id'], qty)], 'inventory': payload['external_id'], 
+                                        'project_id': payload['project_id']})
+            case "project-item-reserve":
+                qty1, qty2 = items.reserve_items(self.connection, payload['item_id'], items.get_internal_id(self.connection, payload['external_id']),
+                                    payload['target_project_id'], payload['item_qty'], 
+                                    payload['source_project_id'] if int(payload['source_project_id']) == -1 else None)
+                
+                send_json(transport, {'type': "project-item-info", 'items': [(payload['item_id'], qty1)], 'inventory': payload['external_id'],
+                                        'project_id': payload['source_project_id']})
+                send_json(transport, {'type': "project-item-info", 'items': [(payload['item_id'], qty2)], 'inventory': payload['external_id'],
+                                        'project_id': payload['target_project_id']})
+            case "project-item-release":
+                qty1, qty2 = items.unreserve_items(self.connection, payload['item_id'], items.get_internal_id(self.connection, payload['external_id']),
+                                                    payload['project_id'], payload['item_qty'])
+                send_json(transport, {'type': "project-item-info", 'items': [(payload['item_id'], qty1)], 'inventory': payload['external_id'],
+                                        'project_id': payload['project_id']})
+                send_json(transport, {'type': "project-item-info", 'items': [(payload['item_id'], qty1)], 'inventory': payload['external_id'],
+                                        'project_id': -1})
 
 async def main():
     def listener_factory(r: WSUpgradeRequest):

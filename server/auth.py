@@ -38,10 +38,10 @@ def validate(connection, data) -> tuple[bool, str | None]:
 
             row = cursor.fetchone()
 
-    if row is None or row[0] != data['username'].lower():
+    if row is None or row[0].lower() != data['username'].lower():
         return False, "Invalid access key/username pair!"
     
-    if row[0] != data['username'].lower():
+    if row[0].lower() != data['username'].lower():
         mojangUuid = requests.get(mojangUrl+data['username']).json()['id']
 
         if row[1] == mojangUuid:
