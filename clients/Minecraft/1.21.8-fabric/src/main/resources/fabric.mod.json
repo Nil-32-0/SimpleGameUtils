@@ -1,0 +1,41 @@
+{
+	"schemaVersion": 1,
+	"id": "simplegameutils",
+	"version": "${version}",
+	"name": "SimpleGameUtils",
+	"description": "This is an example description! Tell everyone what your mod is about!",
+	"authors": [
+		"Me!"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/simplegameutils/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"nil.simplegameutils.SimpleGameUtils"
+		],
+		"client": [
+			"nil.simplegameutils.SimpleGameUtilsClient"
+		],
+		"modmenu": [
+			"nil.simplegameutils.integration.SGUModMenuIntegration"
+		]
+	},
+	"mixins": [
+		"simplegameutils.mixins.json",
+		{
+			"config": "simplegameutils.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.18.4",
+		"minecraft": "~1.21.8",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
