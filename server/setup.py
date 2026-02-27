@@ -93,6 +93,7 @@ if __name__ == "__main__":
         elif style == "csv":
             with open(str(path)+"/library/" + game + "/items.csv", newline='') as file:
                 csv_reader = reader(file, delimiter=",", quotechar='|')
+                writeData(connection, "INSERT INTO entry_types(entry_type) VALUES(item);")
                 for line in csv_reader:
                     id = line[1]
                     name = line[0]
