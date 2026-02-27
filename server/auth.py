@@ -15,7 +15,9 @@ def generate_userkey(connection, data) -> tuple[str, str]:
     if username in [row[1] for row in rows]:
         raise DuplicateData("Username " + username + " already exists!")
 
-    mojangUuid = requests.get(mojangUrl+username).json()['id']
+    req = requests.get(mojangUrl+data['username']).json()
+    print(req)
+    mojangUuid = req['id']
 
     if mojangUuid in [row[0] for row in rows]:
         raise DuplicateData("Error: that user already has an account!")
@@ -42,7 +44,9 @@ def validate(connection, data) -> tuple[bool, str | None]:
         return False, "Invalid access key/username pair!"
     
     if row[0].lower() != data['username'].lower():
-        mojangUuid = requests.get(mojangUrl+data['username']).json()['id']
+        req = requests.get(mojangUrl+data['username']).json()
+        print(req)
+        mojangUuid = req['id']
 
         if row[1] == mojangUuid:
             writeData("UPDATE users SET username = %s WHERE useruuid = %s;", data['username'], data['uuid'])

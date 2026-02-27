@@ -40,7 +40,7 @@ class SBUMsgType(Enum):
     PROJECT_CREATE = "project-create", ['type', 'name', 'scope', 'desc', 'group_id']
     PROJECT_DELETE = "project-delete", ['type', 'project_id']
     PROJECT_TRANSFER = "project-transfer", ['type', 'project_id', 'new_owner_username']
-    PROJECT_SCOPE = "project-scope", ['type', 'scope', 'group_id']
+    PROJECT_SCOPE = "project-scope", ['type', 'project_id', 'scope', 'group_id']
     PROJECT_ITEM_TRACK = "project-item-track", ['type', 'project_id', 'item_id', 'item_qty']
     PROJECT_ITEM_DELETE = "project-item-delete", ['type', 'project_id', 'item_id']
     PROJECT_ITEM_ADD = "project-item-add", ['type', 'project_id', 'item_id', 'item_qty', 'external_id']
@@ -197,7 +197,7 @@ class ServerClientListener(WSListener):
                     'message': "The '" + groups.get_group_name(self.connection, payload['group_id']) + "' group has been deleted."
                 })
 
-            case "group-transfer":                
+            case "group-transfer":
                 if not auth.username_exists(self.connection, payload['new_owner_username']):
                     send_json(transport, {'type': "error", 'message': "You can't transfer ownership to a player who doesn't exist!"})
                     return
@@ -245,7 +245,7 @@ class ServerClientListener(WSListener):
                     send_json(transport, {'type': "error", 'message': "You can't remove a player who isn't in the group!"})
                     return
                 
-                groups.remove_user(self.connection, self.uuid, payload['group_id'])
+                groups.remove_user(self.connection, user_uuid, payload['group_id'])
                 send_json(transport, {
                     'type': "group-success",
                     'message': payload['member_username'] + " has been removed from the '" + 
@@ -341,7 +341,9 @@ class ServerClientListener(WSListener):
                     entry['inventory'] = items.get_remote_id(self.connection, entry['inventory'])
                 progress = {}
                 for item in goal:
-                    progress[goal] = {'goal': goal[item], 'gathered': total[item]}
+                    if item not in total:
+                        total[item] = 0
+                    progress[item] = {'goal': goal[item], 'gathered': total[item]}
                 
                 send_json(transport, {'type': "project-info-single", 'project_id': payload['project_id'],
                                         'goal': goal, 'gathered': gathered, 'progress': progress})

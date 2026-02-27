@@ -1,7 +1,31 @@
+from auth import openConnection
 from connect import writeData
+import json
+from pathlib import Path
+from csv import reader
+from getpass import getpass
+
+path = Path(__file__).parent
 
 if __name__ == "__main__":
-    writeData(
+    CREATE_INI = True if input("Create database options file(y/n)? ").lower()[0] == "y" else False
+    CREATE_TABLES = True if input("Create tables(y/n)? ").lower()[0] == "y" else False
+    POPULATE_ITEMS = True if input("Populate items(y/n)? ").lower()[0] == "y" else False
+
+    if CREATE_INI:
+        host = input("Enter the host IP: ")
+        database = input("Enter the database name: ")
+        user = input("Enter the username for the SGU query role: ")
+        passwd = getpass("Enter the password for the user: ")
+        with open(str(path)+"/database.ini", "w") as file:
+            file.write("[postgresql]\n")
+            file.write("host="+host+"\n")
+            file.write("database="+database+"\n")
+            file.write("user="+user+"\n")
+            file.write("password="+passwd)
+    connection = openConnection(str(path)+"/database.ini")
+    if CREATE_TABLES:
+        writeData(connection, 
         "CREATE TABLE users(" \
         "useruuid VARCHAR(64) PRIMARY KEY," \
         "username VARCHAR(16) NOT NULL," \
@@ -23,7 +47,7 @@ if __name__ == "__main__":
         "description TEXT" \
         ");" \
         "CREATE TABLE items(" \
-        "item_id VARCHAR(64) PRIMARY KEY," \
+        "item_id VARCHAR(128) PRIMARY KEY," \
         "item_name VARCHAR(64) NOT NULL," \
         "item_type VARCHAR(64) NOT NULL REFERENCES entry_types" \
         ");" \
@@ -35,7 +59,7 @@ if __name__ == "__main__":
         "CREATE TABLE projects(" \
         "project_id SERIAL PRIMARY KEY," \
         "project_name VARCHAR(64) NOT NULL," \
-        "project_desc TEST," \
+        "project_desc TEXT," \
         "owner_uuid VARCHAR(64) NOT NULL REFERENCES users ON DELETE CASCADE," \
         "scope scopes NOT NULL," \
         "group_id integer," \
@@ -52,6 +76,25 @@ if __name__ == "__main__":
         "item_id VARCHAR(64) NOT NULL REFERENCES items ON DELETE CASCADE," \
         "item_count INTEGER DEFAULT 0," \
         "project_id INTEGER REFERENCES projects ON DELETE CASCADE," \
-        "CONSTRAINT unique_entries UNIQUE (inventory,item_id,project_id) NULLS NOT DISTINCT" \
+        "CONSTRAINT unique_entries UNIQUE NULLS NOT DISTINCT (inventory,item_id,project_id)" \
         ");"
-    )
+        )
+    if POPULATE_ITEMS:
+        game = input("Enter the game ID: ")
+        style = input("Enter the input style(json/csv): ").lower()
+        if style == "json":
+            for file in path.rglob("./library/" + game + "/items/*.json"):
+                data = json.loads(file.read_text())
+                print(data['displayname'][3:])
+                print(data['itemid'])
+                print(data['internalname'])
+                writeData(connection, "INSERT INTO items(item_id,item_name,item_type) VALUES(%s,%s,%s);",
+                            data['internalname']+"&"+data['itemid'], data['displayname'][3:], "item")
+        elif style == "csv":
+            with open(str(path)+"/library/" + game + "/items.csv", newline='') as file:
+                csv_reader = reader(file, delimiter=",", quotechar='|')
+                for line in csv_reader:
+                    id = line[1]
+                    name = line[0]
+                    writeData(connection, "INSERT INTO items(item_id,item_name,item_type) VALUES(%s,%s,%s);",
+                                id, name, "item")

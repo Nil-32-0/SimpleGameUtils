@@ -30,7 +30,7 @@ def get_group_member_usernames(connection, group_id) -> list[str]:
 
 def get_group_list(connection, uuid, include_uuids = True) -> dict[int, dict[str, any]]:
     group_info = {}
-    tuple_list = queryData(connection, "SELECT group_id,group_name,owner_uuid,username " \
+    tuple_list = queryData(connection, "SELECT groups.group_id,group_name,owner_uuid,username " \
     "FROM groups " \
     "LEFT JOIN users ON groups.owner_uuid = users.useruuid " \
     "LEFT JOIN group_relations ON groups.group_id = group_relations.group_id " \
