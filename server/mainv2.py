@@ -7,6 +7,8 @@ import items
 from json import loads, dumps
 from picows import ws_create_server, WSFrame, WSTransport, WSListener, WSMsgType, WSUpgradeRequest, WSAutoPingStrategy
 import projects
+from prompt_toolkit import PromptSession
+from prompt_toolkit.patch_stdout import patch_stdout
 
 auth_connections = {}
 
@@ -400,7 +402,15 @@ class ServerClientListener(WSListener):
                 send_json(transport, {'type': "project-item-info", 'items': [(payload['item_id'], qty1)], 'inventory': payload['external_id'],
                                         'project_id': -1})
 
-async def main():
+async def userInput(queue: asyncio.Queue):
+    session = PromptSession()
+    result = ""
+    while result != "exit":
+        with patch_stdout():
+            result = await session.prompt_async("> ")
+        queue.put_nowait(result)
+
+async def server_loop(queue: asyncio.Queue):
     def listener_factory(r: WSUpgradeRequest):
         return ServerClientListener()
     
@@ -414,7 +424,22 @@ async def main():
     for s in server.sockets:
         print(f"Server started on {s.getsockname()}")
     
-    await server.serve_forever()
+    await server.start_serving()
+    
+    while True:
+        if queue.empty():
+            await asyncio.sleep(1)
+        else:
+            instr = queue.get_nowait()
+            if instr == "exit":
+                server.close()
+                await server.wait_closed()
+                break
+
+async def main():
+    queue = asyncio.Queue()
+
+    await asyncio.gather(userInput(queue), server_loop(queue))
 
 if __name__ == "__main__":
     asyncio.run(main())

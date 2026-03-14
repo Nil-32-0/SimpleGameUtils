@@ -4,11 +4,11 @@ from typing import Optional, Union
 
 def get_remote_id(connection, internal_id: int) -> str:
     """Get the remote uid of the inventory from the internal id"""
-    return queryData(connection, "SELECT remote_uid FROM inventories WHERE inventory_id = %s;", internal_id, fetchAll=False)[0]
+    return queryData(connection, "SELECT remote_uid FROM inventories WHERE inventory = %s;", internal_id, fetchAll=False)[0]
 
 def get_internal_id(connection, remote_id: str) -> int:
     """Get the internal id of the inventory from the external id"""
-    return int(queryData(connection, "SELECT inventory_id FROM inventories WHERE remote_uid = %s;", remote_id, fetchAll=False)[0])
+    return int(queryData(connection, "SELECT inventory FROM inventories WHERE remote_uid = %s;", remote_id, fetchAll=False)[0])
 
 def get_items(connection, id: int) -> list[tuple[str, int]]:
     """Get the items in the inventory, using internal inventory id"""
