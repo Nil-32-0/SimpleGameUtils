@@ -80,7 +80,7 @@ class ServerClientListener(WSListener):
                 return
             
             if self not in auth_connections.values():
-                if payload['type'] in ["auth-username", "auth-uuid"]:
+                if payload['type'] == "auth-login":
                     self.on_initial_connection(transport, payload)
                 else:
                     send_json(transport, {
@@ -106,20 +106,20 @@ class ServerClientListener(WSListener):
         if self.connection is None:
             self.connection = openConnection()
 
-        if payload['type'] == "auth-uuid": # User exists
+        if auth.username_exists(self.connection, payload['username']): # User exists
             valid, errorMsg = auth.validate(self.connection, payload)
             if not valid:
                 send_json(transport, {'type': "error", 'message': errorMsg})
                 return
-            uid = payload['uuid']
+            uid = auth.get_uuid_from_username(self.connection, payload['username'])
 
         else: # User must be created
-            uid = auth.generate_userkey(self.connection, payload)
+            uid, hashword = auth.generate_userkey(self.connection, payload)
             writeData(self.connection, 
-                "INSERT INTO users(useruuid, username) VALUES(%s,%s);", 
-                uid, payload['username']
+                "INSERT INTO users(useruuid, username, password) VALUES(%s,%s,%s);", 
+                uid, payload['username'], hashword
             )
-            send_json(transport, {'type': "auth-key",'uuid': uid})
+            send_json(transport, {'type': "account-creation-success"})
 
         self.uuid = uid
         send_json(transport, {'type': "auth-success"})

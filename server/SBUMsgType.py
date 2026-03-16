@@ -1,10 +1,8 @@
 from enum import Enum
 
 class SBUMsgType(Enum):
-    AUTH_KEY = "auth-key", ['type', 'uuid']
     AUTH_SUCCESS = "auth-success", ['type']
-    AUTH_USERNAME = "auth-username", ['type', 'username']
-    AUTH_UUID = "auth-uuid", ['type', 'username', 'uuid']
+    AUTH_LOGIN = "auth-login", ['type', 'username', 'password']
     ERROR = "error", ['type', 'message']
     GROUP_CREATE = "group-create", ['type', 'group_name']
     GROUP_DELETE = "group-delete", ['type', 'group_id']

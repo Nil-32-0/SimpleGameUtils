@@ -1,7 +1,8 @@
 from connect import queryData
+from passlib.hash import bcrypt
 import random
 
-def generate_userkey(connection, data) -> str:
+def generate_userkey(connection, data) -> tuple[str, str]:
     rows = []
     with connection:
         with connection.cursor() as cursor:
@@ -24,18 +25,18 @@ def generate_userkey(connection, data) -> str:
             uid += chr(random.choice(acceptableValues))
         if uid not in uuids:
             break
-    
-    return uid
+
+    return uid, bcrypt.hash(data['password'])
 
 def validate(connection, data) -> tuple[bool, str | None]:
     with connection:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT username FROM users WHERE useruuid = %s;",  (data['uuid'],))
+            cursor.execute("SELECT password FROM users WHERE username = %s;",  (data['username'],))
 
             row = cursor.fetchone()
 
-    if row is None or row[0] != data['username']:
-        return False, "Invalid access key/username pair!"
+    if row is None or not bcrypt.verify(data['password'], row[0]):
+        return False, "Invalid password!"
 
     return True, None
     
