@@ -163,10 +163,10 @@ class ServerClientListener(WSListener):
             uid = payload['uuid']
 
         else: # User must be created
-            uid, mojanguuid = auth.generate_userkey(self.connection, payload)
+            uid = auth.generate_userkey(self.connection, payload)
             writeData(self.connection, 
-                "INSERT INTO users(useruuid, username, mojanguuid) VALUES(%s,%s,%s);", 
-                uid, payload['username'], mojanguuid
+                "INSERT INTO users(useruuid, username) VALUES(%s,%s);", 
+                uid, payload['username']
             )
             send_json(transport, {'type': "auth-key",'uuid': uid})
 

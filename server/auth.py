@@ -1,58 +1,42 @@
-from connect import openConnection, queryData, writeData
+from connect import queryData
 import random
-import requests
 
-mojangUrl = "https://api.mojang.com/users/profiles/minecraft/"
-
-def generate_userkey(connection, data) -> tuple[str, str]:
+def generate_userkey(connection, data) -> str:
     rows = []
     with connection:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT mojanguuid,username FROM users;")
+            cursor.execute("SELECT username,useruuid FROM users;")
             rows = cursor.fetchall()
 
     username = data['username']
-    if username in [row[1] for row in rows]:
+    if username in [row[0] for row in rows]:
         raise DuplicateData("Username " + username + " already exists!")
-
-    req = requests.get(mojangUrl+data['username']).json()
-    print(req)
-    mojangUuid = req['id']
-
-    if mojangUuid in [row[0] for row in rows]:
-        raise DuplicateData("Error: that user already has an account!")
+    uuids = [row[1] for row in rows]
     
-    uid = ""
     acceptableValues = list(range(48, 58))
     acceptableValues.extend(range(65, 91))
     acceptableValues.extend(range(97, 123))
+
+    # Allows for over 5 * 10^114 uuids
+    while True:
+        uid = ""
+        for i in range(64):
+            uid += chr(random.choice(acceptableValues))
+        if uid not in uuids:
+            break
     
-    for char in mojangUuid:
-        uid += char
-        uid += chr(random.choice(acceptableValues))
-    
-    return uid, mojangUuid
+    return uid
 
 def validate(connection, data) -> tuple[bool, str | None]:
     with connection:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT username,mojanguuid FROM users WHERE useruuid = %s;",  (data['uuid'],))
+            cursor.execute("SELECT username FROM users WHERE useruuid = %s;",  (data['uuid'],))
 
             row = cursor.fetchone()
 
-    if row is None or row[0].lower() != data['username'].lower():
+    if row is None or row[0] != data['username']:
         return False, "Invalid access key/username pair!"
-    
-    if row[0].lower() != data['username'].lower():
-        req = requests.get(mojangUrl+data['username']).json()
-        print(req)
-        mojangUuid = req['id']
 
-        if row[1] == mojangUuid:
-            writeData("UPDATE users SET username = %s WHERE useruuid = %s;", data['username'], data['uuid'])
-        else:
-            return False, "Invalid access key/username pair!"
-        
     return True, None
     
 def user_exists(connection, uuid):

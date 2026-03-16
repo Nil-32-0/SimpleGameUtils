@@ -15,4 +15,4 @@ Run install.sh or install.bat depending on your operating system. This will run 
 To start the server in the future, use run.sh/run.bat.
 
 ### Stopping the server:
-To stop the server, press Ctrl+C in the terminal it is running in. At the moment it does not shut down gracefully; this functionality will be added later.
+To stop the server, enter 'exit' into the command prompt.
