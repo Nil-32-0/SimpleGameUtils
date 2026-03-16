@@ -48,7 +48,7 @@ class ServerClientListener(WSListener):
         if self.connection is not None:
             self.connection.close()
             print("SQL connection closed!")
-        auth_connections.pop(self, None)
+        auth_connections.pop(self.uuid, None)
         print("Client disconnected")
 
     def on_ws_frame(self, transport: WSTransport, frame: WSFrame):
