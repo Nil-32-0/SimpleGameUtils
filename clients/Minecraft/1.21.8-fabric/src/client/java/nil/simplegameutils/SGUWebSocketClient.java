@@ -27,13 +27,10 @@ public class SGUWebSocketClient extends WebSocketClient  {
     @Override
     public void onOpen(ServerHandshake handshakedata) {
         JsonObject auth = new JsonObject();
-        auth.addProperty("username", Minecraft.getInstance().getUser().getName());
-        if (SimpleGameUtilsClient.CONFIG.accessKey == null || SimpleGameUtilsClient.CONFIG.accessKey.equals("")) {
-            auth.addProperty("type", "auth-username");
-        } else {
-            auth.addProperty("type", "auth-uuid");
-            auth.addProperty("uuid", SimpleGameUtilsClient.CONFIG.accessKey);
-        }
+
+        auth.addProperty("type", "auth-login");
+        auth.addProperty("username", SimpleGameUtilsClient.CONFIG.username);
+        auth.addProperty("password", SimpleGameUtilsClient.CONFIG.password);
 
         send(StandardCharsets.UTF_8.encode(auth.toString()));
         System.out.println("Connection opened.");
@@ -58,9 +55,14 @@ public class SGUWebSocketClient extends WebSocketClient  {
             }
         }
 
-        if (obj.get("type").getAsString().equals("auth-key")) {
-            SimpleGameUtilsClient.CONFIG.accessKey = obj.get("uuid").getAsString() + "&delete";
-            p.displayClientMessage(Component.literal("Save this access key!"), false);
+        if (obj.get("type").getAsString().equals("project-info-single")) {
+            JsonObject prog = obj.get("progress").getAsJsonObject();
+            for (String itemID : prog.keySet()) {
+                p.displayClientMessage(Component.literal("Progress towards " + itemID + ":"), false);
+                int goal = prog.get(itemID).getAsJsonObject().get("goal").getAsInt();
+                int gathered = prog.get(itemID).getAsJsonObject().get("gathered").getAsInt();
+                p.displayClientMessage(Component.literal(gathered + "/" + goal), false);
+            }
         }
     }
 
