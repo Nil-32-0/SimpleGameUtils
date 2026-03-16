@@ -64,6 +64,10 @@ public class SGUWebSocketClient extends WebSocketClient  {
                 p.displayClientMessage(Component.literal(gathered + "/" + goal), false);
             }
         }
+
+        if (obj.get("type").getAsString().equals("change-success")) {
+            p.displayClientMessage(Component.literal("Update the changed value in the mod config!"), false);
+        }
     }
 
     @Override

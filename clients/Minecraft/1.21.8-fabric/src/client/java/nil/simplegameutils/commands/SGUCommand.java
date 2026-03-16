@@ -33,6 +33,20 @@ public final class SGUCommand {
 
         dispatcher.register(literal("sgu")
             .then(literal("connect").executes(SGUCommand::connectToServer))
+            .then(literal("change")
+                .then(literal("password").then(argument("new_password", StringArgumentType.string()).executes(ctx -> {
+                    connectToServer(ctx);
+                    JsonRequestBuilder req = new JsonRequestBuilder("change_password");
+                    client.send(req.addFromStringParam("new_password", ctx).build().toString());
+                    return 0;
+                })))
+                .then(literal("username").then(argument("new_username", StringArgumentType.string()).executes(ctx -> {
+                    connectToServer(ctx);
+                    JsonRequestBuilder req = new JsonRequestBuilder("change_username");
+                    client.send(req.addFromStringParam("new_username", ctx).build().toString());
+                    return 0;
+                })))
+            )
             .then(literal("group")
                 .then(literal("create").then(argument("group_name", StringArgumentType.string()).executes(ctx -> {
                     connectToServer(ctx);
