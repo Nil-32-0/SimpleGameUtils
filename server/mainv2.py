@@ -90,6 +90,18 @@ class ServerClientListener(WSListener):
             else:
                 try:
                     match payload['type']:
+                        case "change_password":
+                            valid, errorMsg = auth.update_password(self.connection, self.uuid, payload['new_password'])
+                            if not valid:
+                                send_json(transport, {'type': "error", 'message': errorMsg})
+                            else:
+                                send_json(transport, {'type': "change-success", 'message': "New password set successfully!"})
+                        case "change_username":
+                            valid, errorMsg = auth.update_username(self.connection, self.uuid, payload['new_username'])
+                            if not valid:
+                                send_json(transport, {'type': "error", 'message': errorMsg})
+                            else:
+                                send_json(transport, {'type': "change-success", 'message': "New username set successfully!"})
                         case x if str(x).startswith("group"):
                             self.group_handler(transport, payload)
                         case x if str(x).startswith("inventory"):
