@@ -1,4 +1,4 @@
-from connect import queryData, writeData
+from backend.connect import queryData, writeData
 
 def get_group_name(connection, group_id) -> str:
     """Get the name of the group from the id."""
@@ -113,9 +113,9 @@ def get_groups_info(connection, group_ids: list[int], include_uuids = True) -> d
 
 def create_group(connection, uuid, name) -> int:
     """Create a new group with the specified name. The owner of the group is the provided uuid."""
-    group_id = writeData(connection, "INSERT INTO groups(owner_uuid, group_name) VALUES(%s,%s) RETURNING group_id;", uuid, name)
+    group_id = writeData(connection, "INSERT INTO groups(owner_uuid, group_name) VALUES(%s,%s) RETURNING group_id;", uuid, name)[0][0] # Returns a list of tuples
 
-    add_user(connection, uuid, group_id[0])
+    add_user(connection, uuid, group_id)
     return group_id
 
 def delete_group(connection, group_id) -> None:

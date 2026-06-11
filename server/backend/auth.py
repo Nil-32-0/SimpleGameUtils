@@ -1,4 +1,4 @@
-from connect import queryData, writeData
+from backend.connect import queryData, writeData
 from passlib.hash import bcrypt
 import random
 

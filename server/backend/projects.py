@@ -1,5 +1,5 @@
-from connect import queryData, writeData
-from items import get_items_for_project, unreserve_items
+from backend.connect import queryData, writeData
+from backend.items import get_items_for_project, unreserve_items
 
 from enum import StrEnum
 from typing import Optional

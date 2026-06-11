@@ -1,5 +1,4 @@
-from auth import openConnection
-from connect import writeData
+from backend.connect import openConnection, writeData
 import json
 from pathlib import Path
 from csv import reader
@@ -29,7 +28,7 @@ if __name__ == "__main__":
         "CREATE TABLE users(" \
         "useruuid VARCHAR(64) PRIMARY KEY," \
         "username VARCHAR(16) NOT NULL," \
-        "password VARCHAR(32) NOT NULL" \
+        "password VARCHAR(128) NOT NULL" \
         ");" \
         "CREATE TABLE groups(" \
         "group_id SERIAL PRIMARY KEY," \
